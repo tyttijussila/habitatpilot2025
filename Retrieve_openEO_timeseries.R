@@ -1,17 +1,20 @@
+### HABITATPILOT 2025 SUBTASK: HYDROLOGICAL INDICATORS
+### Retrieve Sentinel-2 image time series from openEO 
+
 # Load required libraries
 library(openeo)
 library(sf)
 library(dplyr)
 
 # Connect to openEO backend
-connection <- connect("https://openeo.dataspace.copernicus.eu") # (Tytti: VPN off)
+# Requires registering at https://dataspace.copernicus.eu/
+connection <- connect("https://openeo.dataspace.copernicus.eu") # (VPN off)
 login()
 
-setwd("D:/Users/E1007595/Suot/2024/Habitaattipilotti")
+setwd("path_working_directory")
 
 # Read Aapa mire polygons from file
-aapa_polygons <- st_read("INDICATOR_ts_pilot/aapa_huonotila_sample20_Zone3_AntinDIRsuot.gpkg") %>% st_transform(crs = 4326)
-aapa_polygons <- st_read("INDICATOR_ts_pilot/aapa_undrained_top20_ojitus45_Zone3_AntinDIRsuot.gpkg") %>% st_transform(crs = 4326)
+aapa_polygons <- st_read("sites.gpkg") %>% st_transform(crs = 4326)
 
 # Define bands to download
 bands <- c("B02", "B03", "B04", "B05", "B08", "B8A", "B11", "B12", "SCL", "CLD")
@@ -20,7 +23,7 @@ bands <- c("B02", "B03", "B04", "B05", "B08", "B8A", "B11", "B12", "SCL", "CLD")
 # Submit all jobs and store them in a list
 jobs <- list()
 
-for (i in c(11:19)) {
+for (i in c(1:20)) {
   polygon <- aapa_polygons[i, ]
   bbox <- st_bbox(polygon)
   
@@ -58,7 +61,7 @@ for (i in c(11:19)) {
   result <- process$save_result(data = collection, format = "NetCDF")
 
   # Create the batch job
-  job <- create_job(graph = result, title = paste0("aapa_pristine_", i))
+  job <- create_job(graph = result, title = paste0("site_", i))
 
   # Submit the job
   #job$send_job()
@@ -74,7 +77,7 @@ start_job(job_names[1]) # "j-250903124432404bb350befb866ee80f"
 # start_job(job=job) 
 #--> status: running
 
-for(i in 2:20) {
+for(i in 1:20) {
   start_job(job_names[i])
 }
 
@@ -84,10 +87,11 @@ list_jobs() |> as_tibble() |> count(status)
 
 list_jobs() |> as_tibble() -> jobs_df
 
-for(i in c(1:9)) {
+for(i in c(1:20)) {
   id <- unlist(jobs_df[i,"id"])
-  name <- paste0("INDICATOR_ts_pilot/S2/aapa_pristine/", gsub(" ", "_", unlist(jobs_df[i, "title"])), ".nc")
+  name <- paste0("output_path/", gsub(" ", "_", unlist(jobs_df[i, "title"])), ".nc")
   print(name)
-  download_results(id, folder = "INDICATOR_ts_pilot/S2/aapa_pristine/") -> downname
+  download_results(id, folder = "output_path/") -> downname
   file.rename(unlist(downname), name)
 }
+
