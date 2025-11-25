@@ -1,3 +1,8 @@
+### HABITAT PILOT 2025 HYDROLOGY SUBTASK: 
+### ANALYSE INDICATOR TIME SERIES
+
+# Author: Tytti Jussila tytti.jussila@syke.fi
+
 library(tidyverse)
 library(sf)
 library(stars)
@@ -30,7 +35,7 @@ dplyr::tibble(
 print(scl_code)
 
 
-# for testing read one of the datacubes built in Retrieve_aapa.R
+# for testing read one of the datacubes built using script Retrieve_openEO_timeseries.R
 obj <- read_stars("path/aapa_pristine_3.nc") 
 
 
@@ -490,67 +495,4 @@ ggplot() +
 #   theme_minimal()
 
 
-#
-# All in a function (Analyze_aapa.R)
-# (Not yet adjusted for the ver2 script)
-# 
 
-inundation_fun <- function(ncfile) {
-  poly_id <- 
-    #unlist(str_extract_all(ncfile, "//d+"))[2] |>
-    str_extract(ncfile, "//d+") |>
-    as.integer()
-  
-  obj <- 
-    read_stars(paste0("S2/",ncfile))
-  
-  polygon_id <- 
-    aapa_polygons[poly_id, ] |> 
-    st_transform(st_crs(obj))
-  
-  clear_dates <-
-    obj |> 
-    as_tibble() |> 
-    group_by(t) |> 
-    summarize(prop_scl = sum(if_else(SCL %in% c(4,5,6), 1, 0)) / n()) |> 
-    filter(prop_scl > 0.95) |> 
-    pull(t) 
-  
-  obj_clear <-
-    obj |>
-    filter(t %in% clear_dates) |>
-    mutate(across(everything(), ~ if_else(SCL %in% c(4, 5, 6), ., NA)))
-  
-  # Mask out the polygon
-  obj_poly <-
-    obj_clear |>
-    st_crop(polygon_id)
-  
-  # Inundation function Jussila
-  obj_Jussila <-
-    obj_poly |>
-    mutate(inundation_Jussila = case_when(
-      is.na(B11) ~ NA_real_,
-      B11 < 1396 & B8A < 1817 ~ 1,
-      B11 < 1247 & B8A >= 1817 ~ 1,
-      B11 >= 1396 & B04 < 391 & ((B03 - B12) / (B03 + B12)) < -0.43 & B12 < 1496 ~ 1,
-      TRUE ~ 0
-    ))
-  
-  prop_inundation <-
-    obj_Jussila |> 
-    as_tibble() |>
-    group_by(t) |>
-    summarize(inundation = sum(inundation_Jussila, na.rm = TRUE) / n(), .groups = "drop") |>
-    mutate(file = ncfile, id = poly_id, .before = t)
-  
-  return(prop_inundation)
-  
-}
-
-inundation_fun("polygon_9.nc")
-
-system.time(
-res_inundation <-
-  map_dfr(dir("S2"), inundation_fun, .id = "polygon")
-)
